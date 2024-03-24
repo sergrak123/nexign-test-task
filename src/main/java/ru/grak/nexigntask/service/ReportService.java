@@ -1,17 +1,19 @@
 package ru.grak.nexigntask.service;
 
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import ru.grak.nexigntask.dto.CallDataRecord;
 import ru.grak.nexigntask.enums.TypeCall;
 import ru.grak.nexigntask.exceptions.FileReadingException;
 import ru.grak.nexigntask.exceptions.AbonentNotFoundException;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -19,9 +21,9 @@ import static ru.grak.nexigntask.utils.PrintUtil.*;
 
 public class ReportService {
 
-    private static final String CDR_FOLDER_PATH = "cdr_files/";
     private static final String REPORT_FOLDER_PATH = "reports/";
     private static final String REPORT_FILE_EXTENSION = ".json";
+    private static final String CDR_PATH = "cdr.txt";
 
     public static void main(String[] args) {
         generateReport();
@@ -33,7 +35,7 @@ public class ReportService {
 
         List<CallDataRecord> callDataRecordList = new ArrayList<>();
 
-        var cdrFilePath = Paths.get("cdr.txt");
+        var cdrFilePath = Paths.get(CDR_PATH);
         try (Stream<String> stream = Files.lines(cdrFilePath)) {
             stream.forEach(l -> {
                 var cdr = l.split(", ");
@@ -63,10 +65,59 @@ public class ReportService {
                         Collectors.groupingBy(t -> extractMonth(t.getDateTimeStartCall()))));
     }
 
+    private static void generateUDR(List<CallDataRecord> callDataRecordList) {
+
+        Map<String, Map<Integer, List<CallDataRecord>>> aggregatedMap =
+                aggregateDataByMsisdnAndMonth(callDataRecordList);
+
+        createDirectory(REPORT_FOLDER_PATH);
+
+        for (var unit : aggregatedMap.entrySet()) {
+            String msisdn = unit.getKey();
+
+            for (int month = 1; month <= 12; month++) {
+                long inComingCall = 0;
+                long outComingCall = 0;
+
+                if (unit.getValue().containsKey(month)) {
+                    for (CallDataRecord dataRecord : unit.getValue().get(month)) {
+                        long duration = dataRecord.getDateTimeEndCall() - dataRecord.getDateTimeStartCall();
+                        if (dataRecord.getTypeCall().equals(TypeCall.OUTGOING)) {
+                            outComingCall += duration;
+                        } else {
+                            inComingCall += duration;
+                        }
+                    }
+                }
+                saveUdrRecord(msisdn, month,formatDuration(inComingCall), formatDuration(outComingCall));
+            }
+        }
+    }
+
+    private static void saveUdrRecord(String msisdn, int month, String incomingCall, String outcomingCall) {
+
+        String reportFileName = REPORT_FOLDER_PATH + msisdn + "_" + month + REPORT_FILE_EXTENSION;
+
+        Map<String, Object> udrMap = new LinkedHashMap<>();
+        udrMap.put("msisdn", msisdn);
+        udrMap.put("incomingCall", Collections.singletonMap("totalTime", incomingCall));
+        udrMap.put("outgoingCall", Collections.singletonMap("totalTime", outcomingCall));
+
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectWriter writer = mapper.writer(new DefaultPrettyPrinter());
+
+        try {
+            writer.writeValue(Paths.get(reportFileName).toFile(), udrMap);
+        } catch (IOException e) {
+            System.err.println("Ошибка при записи udr: " + e.getMessage());
+        }
+    }
+
     //  таблицу со всеми абонентами и итоговым временем звонков по всему тарифицируемому периоду каждого абонента;
     public static void generateReport() {
 
         List<CallDataRecord> callDataRecordList = getListFromCdrFile();
+        generateUDR(callDataRecordList);
 
         var aggregatedMap = callDataRecordList
                 .stream()
@@ -95,6 +146,7 @@ public class ReportService {
     //  таблицу по одному абоненту и его итоговому времени звонков в каждом месяце;
     public static void generateReport(String msisdn) {
         List<CallDataRecord> callDataRecordList = getListFromCdrFile();
+        generateUDR(callDataRecordList);
 
         Map<String, Map<Integer, List<CallDataRecord>>> aggregatedMap = aggregateDataByMsisdnAndMonth(callDataRecordList);
 
@@ -123,10 +175,11 @@ public class ReportService {
         }
     }
 
-//  таблицу по одному абоненту и его итоговому времени звонков в указанном месяце.
+    //  таблицу по одному абоненту и его итоговому времени звонков в указанном месяце.
     public static void generateReport(String msisdn, int month) {
 
         List<CallDataRecord> callDataRecordList = getListFromCdrFile();
+        generateUDR(callDataRecordList);
 
         Map<String, Map<Integer, List<CallDataRecord>>> aggregatedMap = aggregateDataByMsisdnAndMonth(callDataRecordList);
 
@@ -167,74 +220,7 @@ public class ReportService {
                 d.toSeconds() % 60);
     }
 
-
-    private void generateUDR() {
-
+    private static void createDirectory(String path) {
+        new File(path).mkdirs();
     }
-
-//    private void generateReportForMonth(int month) {
-//        try {
-//            Files.walk(Paths.get(CDR_FOLDER_PATH))
-//                    .filter(Files::isRegularFile)
-//                    .forEach(file -> {
-//                        try {
-//                            String cdrFileName = file.getFileName().toString();
-//                            String msisdn = cdrFileName.substring(0, cdrFileName.indexOf('_'));
-//                            generateReportForMonth(msisdn, month);
-//                        } catch (Exception e) {
-//                            e.printStackTrace();
-//                        }
-//                    });
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
-//    }
-//
-//    private void generateReportForMonth(String msisdn, int month) {
-//        try {
-//            String cdrFileName = CDR_FOLDER_PATH + msisdn + "_" + month + ".txt";
-//            Files.lines(Paths.get(cdrFileName))
-//                    .map(line -> line.split(","))
-//                    .forEach(parts -> {
-//                        int callDuration = Integer.parseInt(parts[4]) - Integer.parseInt(parts[3]);
-//                        callTimes.computeIfAbsent(msisdn, k -> new HashMap<>())
-//                                .merge(month, callDuration, Integer::sum);
-//                    });
-//            saveReport(msisdn, month);
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
-//    }
-//
-//    private static void saveUDR() {
-//        callDurations.forEach((phoneNumber, callStats) -> {
-//            JSONObject udr = new JSONObject();
-//            JSONObject incomingCall = new JSONObject();
-//            JSONObject outgoingCall = new JSONObject();
-//
-//            incomingCall.put("totalTime", formatDuration(callStats.getOrDefault("incomingCall", 0)));
-//            outgoingCall.put("totalTime", formatDuration(callStats.getOrDefault("outgoingCall", 0)));
-//
-//            udr.put("msisdn", phoneNumber);
-//            udr.put("incomingCall", incomingCall);
-//            udr.put("outgoingCall", outgoingCall);
-//
-//            String udrFileName = REPORT_FOLDER_PATH + phoneNumber + UDR_FILE_EXTENSION;
-//            try (FileWriter fileWriter = new FileWriter(udrFileName)) {
-//                fileWriter.write(udr.toString(4));
-//            } catch (IOException e) {
-//                e.printStackTrace();
-//            }
-//        });
-//    }
-//
-//    private void printReportTable() {
-//        System.out.println("MSISDN\t\tMonth\t\tTotal Call Duration (minutes)");
-//        callTimes.forEach((msisdn, monthMap) -> {
-//            monthMap.forEach((month, duration) ->
-//                    System.out.println(msisdn + "\t\t" + month + "\t\t" + duration));
-//        });
-//    }
-
-
 }
