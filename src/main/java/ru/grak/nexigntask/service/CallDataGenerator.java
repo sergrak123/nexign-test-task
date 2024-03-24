@@ -42,7 +42,7 @@ public class CallDataGenerator {
         DbConnectionManager.closeConnection();
     }
 
-    private static void createCdrForMonth(int month) throws IOException, SQLException {
+    public static void createCdrForMonth(int month) throws IOException, SQLException {
 
         String cdrFileName = CDR_FOLDER_PATH + CDR_FILE_PREFIX + "_" + month + CDR_FILE_EXTENSION;
 
@@ -58,7 +58,7 @@ public class CallDataGenerator {
     }
 
     //cdr для одного месяца в хронологическом порядке
-    private static List<CallDataRecord> generateCdrListForMonth(int month) throws SQLException {
+    public static List<CallDataRecord> generateCdrListForMonth(int month) throws SQLException {
         List<CallDataRecord> callDataRecordList = new ArrayList<>();
 
         List<String> msisdnList = TelecomDao.getMsisdnList(DbConnectionManager.getConnection());
