@@ -11,6 +11,7 @@ import ru.grak.nexigntask.exceptions.AbonentNotFoundException;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.*;
 import java.util.*;
@@ -22,36 +23,34 @@ import static ru.grak.nexigntask.utils.PrintUtil.*;
 public class ReportService {
 
     private static final String REPORT_FOLDER_PATH = "reports/";
+    private static final String CDR_FOLDER_PATH = "cdr/";
     private static final String REPORT_FILE_EXTENSION = ".json";
-    private static final String CDR_PATH = "cdr.txt";
 
-    public static void main(String[] args) {
-        generateReport();
-        generateReport("79876543221");
-        generateReport("79876543221", 3);
-    }
-
-    private static List<CallDataRecord> getListFromCdrFile() {
+    private static List<CallDataRecord> getListFromCdrFile() throws IOException {
 
         List<CallDataRecord> callDataRecordList = new ArrayList<>();
 
-        var cdrFilePath = Paths.get(CDR_PATH);
-        try (Stream<String> stream = Files.lines(cdrFilePath)) {
-            stream.forEach(l -> {
-                var cdr = l.split(", ");
+        List<Path> cdrFiles = Files.list(Path.of(CDR_FOLDER_PATH)).toList();
 
-                callDataRecordList.add(new CallDataRecord(
-                        TypeCall.fromNumericValueOfType(cdr[0]),
-                        cdr[1],
-                        Long.parseLong(cdr[2]),
-                        Long.parseLong(cdr[3])
-                ));
-            });
+        for (Path cdrFile : cdrFiles) {
+            var cdrFilePath = Paths.get(CDR_FOLDER_PATH + cdrFile.getFileName());
+            try (Stream<String> stream = Files.lines(cdrFilePath)) {
+                stream.forEach(l -> {
+                    var cdr = l.split(", ");
 
-        } catch (IOException e) {
-            throw new FileReadingException("Ошибка чтения файла");
-        } catch (ArrayIndexOutOfBoundsException e) {
-            throw new FileReadingException("Неверный формат задания данных");
+                    callDataRecordList.add(new CallDataRecord(
+                            TypeCall.fromNumericValueOfType(cdr[0]),
+                            cdr[1],
+                            Long.parseLong(cdr[2]),
+                            Long.parseLong(cdr[3])
+                    ));
+                });
+
+            } catch (IOException e) {
+                throw new FileReadingException("Ошибка чтения файла");
+            } catch (ArrayIndexOutOfBoundsException e) {
+                throw new FileReadingException("Неверный формат задания данных");
+            }
         }
 
         return callDataRecordList;
@@ -114,7 +113,7 @@ public class ReportService {
     }
 
     //  таблицу со всеми абонентами и итоговым временем звонков по всему тарифицируемому периоду каждого абонента;
-    public static void generateReport() {
+    public static void generateReport() throws IOException {
 
         List<CallDataRecord> callDataRecordList = getListFromCdrFile();
         generateUDR(callDataRecordList);
@@ -144,7 +143,7 @@ public class ReportService {
     }
 
     //  таблицу по одному абоненту и его итоговому времени звонков в каждом месяце;
-    public static void generateReport(String msisdn) {
+    public static void generateReport(String msisdn) throws IOException {
         List<CallDataRecord> callDataRecordList = getListFromCdrFile();
         generateUDR(callDataRecordList);
 
@@ -176,7 +175,7 @@ public class ReportService {
     }
 
     //  таблицу по одному абоненту и его итоговому времени звонков в указанном месяце.
-    public static void generateReport(String msisdn, int month) {
+    public static void generateReport(String msisdn, int month) throws IOException {
 
         List<CallDataRecord> callDataRecordList = getListFromCdrFile();
         generateUDR(callDataRecordList);
@@ -220,7 +219,7 @@ public class ReportService {
                 d.toSeconds() % 60);
     }
 
-    private static void createDirectory(String path) {
+    public static void createDirectory(String path) {
         new File(path).mkdirs();
     }
 }
