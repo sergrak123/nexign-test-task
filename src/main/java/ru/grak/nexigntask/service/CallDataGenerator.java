@@ -16,6 +16,9 @@ import java.util.stream.Collectors;
 
 import static ru.grak.nexigntask.utils.RandomDataGenerator.*;
 
+/**
+ * Генератор данных о звонках (CDR - Call Data Records).
+ */
 public class CallDataGenerator {
 
     private static final int NUMBER_OF_MONTHS = 12;
@@ -28,6 +31,12 @@ public class CallDataGenerator {
     private static final String CDR_FILE_PREFIX = "cdr";
     private static final String CDR_FILE_EXTENSION = ".txt";
 
+    /**
+     * Создает CDR файлы для всех месяцев.
+     *
+     * @throws IOException  Если возникает ошибка ввода/вывода при создании файлов.
+     * @throws SQLException Если возникает ошибка при взаимодействии с базой данных.
+     */
     public static void createCdr() throws IOException, SQLException {
 
         ReportService.createDirectory(CDR_FOLDER_PATH);
@@ -42,6 +51,13 @@ public class CallDataGenerator {
         DbConnectionManager.closeConnection();
     }
 
+    /**
+     * Создает CDR файл для указанного месяца.
+     *
+     * @param month Номер месяца.
+     * @throws IOException  Если возникает ошибка ввода/вывода при создании файла.
+     * @throws SQLException Если возникает ошибка при взаимодействии с базой данных.
+     */
     public static void createCdrForMonth(int month) throws IOException, SQLException {
 
         String cdrFileName = CDR_FOLDER_PATH + CDR_FILE_PREFIX + "_" + month + CDR_FILE_EXTENSION;
@@ -57,7 +73,13 @@ public class CallDataGenerator {
         }
     }
 
-    //cdr для одного месяца в хронологическом порядке
+    /**
+     * Генерирует рандомный список данных о звонках для указанного месяца в хронологическом порядке.
+     *
+     * @param month Номер месяца.
+     * @return Список объектов CallDataRecord.
+     * @throws SQLException Если возникает ошибка при взаимодействии с базой данных.
+     */
     public static List<CallDataRecord> generateCdrListForMonth(int month) throws SQLException {
         List<CallDataRecord> callDataRecordList = new ArrayList<>();
 
@@ -88,6 +110,12 @@ public class CallDataGenerator {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Форматирует данные о звонке в строку в формате CDR.
+     *
+     * @param dataRecord Объект CallDataRecord.
+     * @return Строка в формате CDR.
+     */
     private static String cdrFormat(CallDataRecord dataRecord) {
         return dataRecord.getTypeCall().getNumericValueOfType() + ", "
                 + dataRecord.getMsisdn() + ", "
